@@ -3,7 +3,7 @@ defmodule Client do
 
   def init(port) do
     spawn fn ->
-      case :gen_tcp.connect('localhost', port, [:binary, active: false]) do
+      case :gen_tcp.connect('localhost', port, [:binary, packet: :line, active: false, reuseaddr: true]) do
         {:ok, socket} ->
           Logger.info "Connected to #{port}."
           showCommands()
@@ -28,13 +28,14 @@ defmodule Client do
 
   def do_loop(socket, go) do
     cmd = IO.gets('> ')
-    ok = Client.parse_cmd(cmd)
-    do_loop(socket, go)
+    ok = Client.parse_cmd(socket, cmd)
+    do_loop(socket, !ok)
   end
 
-  def parse_cmd(cmd) do
-    Logger.info cmd
-    spl = String.split(cmd)
+  def parse_cmd(socket, cmd) do
+    # spl = String.split(cmd)
+    Client.send(socket, cmd)
+    Client.receive(socket)
     # send formatted to MB
     String.equivalent?(cmd, "quit\n")
   end
@@ -44,12 +45,8 @@ defmodule Client do
   end
 
   def receive(socket) do
-    case :gen_tcp.recv(socket, 0) do
-      {:ok, packet} ->
-        Logger.info("All good: #{packet}")
-      {error, closed} ->
-        Logger.info("Error : #{closed}")
-      end
+    {:ok, data} = :gen_tcp.recv(socket, 0)
+    data
   end
 
   def close(socket) do

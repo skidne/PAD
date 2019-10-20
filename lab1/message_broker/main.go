@@ -23,7 +23,7 @@ func handleConnection(c net.Conn) {
 			break
 		}
 
-		c.Write([]byte(string(temp)))
+		c.Write([]byte(string(temp + "\n")))
 	}
 	c.Close()
 }
