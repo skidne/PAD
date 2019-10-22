@@ -1,57 +1,42 @@
 defmodule Client do
-  require Logger
-
-  def init(port) do
-    spawn fn ->
-      case :gen_tcp.connect('localhost', port, [:binary, packet: :line, active: false, reuseaddr: true]) do
+  def start(port) do
+    spawn(fn ->
+      case :gen_tcp.connect('localhost', port, [:binary, active: true]) do
         {:ok, socket} ->
-          Logger.info "Connected to #{port}."
-          showCommands()
-          Client.do_loop(socket, true)
+          IO.write("Connected to #{port}.\n")
+          Client.Helpers.showCommands()
+          Client.do_loop(socket)
         {:error, reason} ->
-          Logger.error "Could not listen: #{reason}"
+          IO.write("Could not listen: #{reason}\n")
       end
-    end
+    end)
   end
 
-  def showCommands() do
-    Logger.info "To subscribe to a topic, enter 'sub <topic>'"
-    Logger.info "To publish to a specific topic, enter 'pub <topic> <msg>'"
-    Logger.info "To unsubscribe from a topic, enter 'unsub <topic>'"
-    Logger.info "To close the client, enter 'quit'"
-  end
-
-  def do_loop(socket, go) when go == false do
-    Logger.info "Client closing..."
-    Client.close(socket)
-  end
-
-  def do_loop(socket, go) do
-    cmd = IO.gets('> ')
-    ok = Client.parse_cmd(socket, cmd)
-    do_loop(socket, !ok)
-  end
-
-  def parse_cmd(socket, cmd) do
-    # spl = String.split(cmd)
-    Client.send(socket, cmd)
+  def do_loop(socket) do
+    packet_to_send = IO.gets('> ') |> Client.Helpers.parse_cmd(socket)
+    IO.inspect(packet_to_send)
+    Client.send(socket, packet_to_send)
     Client.receive(socket)
-    # send formatted to MB
-    String.equivalent?(cmd, "quit\n")
+  end
+
+  def receive(socket) do
+    receive do
+      {:tcp, ^socket, data} ->
+        IO.write("Received packet: #{data}")
+        Client.do_loop(socket)
+
+      {:tcp_closed, ^socket} ->
+        Client.close(socket)
+    end
   end
 
   def send(socket, msg) do
     :gen_tcp.send(socket, msg)
   end
 
-  def receive(socket) do
-    {:ok, data} = :gen_tcp.recv(socket, 0)
-    data
-  end
-
   def close(socket) do
-    Logger.info("Closing the sender")
+    IO.write("Closing the sender")
     :gen_tcp.close(socket)
-    Logger.info("Done")
+    IO.write("Done")
   end
 end
