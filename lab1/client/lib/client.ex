@@ -6,6 +6,7 @@ defmodule Client do
           IO.write("Connected to #{port}.\n")
           Client.Helpers.showCommands()
           Client.do_loop(socket)
+
         {:error, reason} ->
           IO.write("Could not listen: #{reason}\n")
       end
@@ -14,7 +15,6 @@ defmodule Client do
 
   def do_loop(socket) do
     packet_to_send = IO.gets('> ') |> Client.Helpers.parse_cmd(socket)
-    IO.inspect(packet_to_send)
     Client.send(socket, packet_to_send)
     Client.receive(socket)
   end
@@ -22,7 +22,7 @@ defmodule Client do
   def receive(socket) do
     receive do
       {:tcp, ^socket, data} ->
-        IO.write("Received packet: #{data}")
+        IO.write("Received packet: #{data}\n")
         Client.do_loop(socket)
 
       {:tcp_closed, ^socket} ->

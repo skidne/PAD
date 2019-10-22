@@ -19,8 +19,6 @@ var clientCount = 0
 var allClients = make(map[net.Conn]int)
 var subsribedClients = make(map[string][]net.Conn)
 var newConnections = make(chan net.Conn)
-var deadConnections = make(chan net.Conn)
-var messages = make(chan string)
 
 func connect() {
 	server, err := net.Listen("tcp", ":8001")
@@ -51,7 +49,6 @@ func filter(list []net.Conn, toRemove net.Conn) (ret []net.Conn) {
 			ret = append(ret, s)
 		}
 	}
-
 	return
 }
 
@@ -60,20 +57,16 @@ func unsubscribe(client net.Conn, topic string) {
 }
 
 func publish(topic string, content string) {
-
 	for t, conn := range subsribedClients {
 		if t == topic {
 			for i := 0; i < len(conn); i++ {
 				go func(conn net.Conn, message string) {
-					_, err := conn.Write([]byte(message))
-
-					if err != nil {
-						deadConnections <- conn
-					}
+					msg := &Message{Topic: topic, Content: message}
+					json, _ := json.Marshal(msg)
+					conn.Write(json)
 				}(conn[i], content)
 			}
 		}
-
 	}
 }
 
@@ -88,39 +81,34 @@ func parseCommands(conn net.Conn, msg Message) {
 	}
 }
 
+func read(conn net.Conn, clientId int) {
+	reader := bufio.NewReader(conn)
+	for {
+		incoming, err := reader.ReadString('\n')
+		if err != nil {
+			break
+		}
+
+		var msg Message
+		json.Unmarshal([]byte(incoming), &msg)
+		parseCommands(conn, msg)
+		log.Printf("New message: %s", incoming)
+		conn.Write([]byte("Message received by broker."))
+	}
+}
+
 func main() {
 	connect()
 
 	for {
 		select {
 		case conn := <-newConnections:
-
 			log.Printf("Serving new client, #%d", clientCount)
 
 			allClients[conn] = clientCount
 			clientCount++
 
-			go func(conn net.Conn, clientId int) {
-				reader := bufio.NewReader(conn)
-				for {
-					incoming, err := reader.ReadString('\n')
-					if err != nil {
-						break
-					}
-
-					var msg Message
-					json.Unmarshal([]byte(incoming), &msg)
-					parseCommands(conn, msg)
-					log.Printf("New message: %s", incoming)
-				}
-
-				deadConnections <- conn
-
-			}(conn, allClients[conn])
-
-		case conn := <-deadConnections:
-			log.Printf("Client %d disconnected", allClients[conn])
-			delete(allClients, conn)
+			go read(conn, allClients[conn])
 		}
 	}
 }

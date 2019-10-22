@@ -14,4 +14,8 @@ defmodule Client.Helpers do
     "#{json}\n"
   end
 
+  def deserialize(msg) do
+    Poison.decode!(msg)
+  end
+
 end
